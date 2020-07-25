@@ -2,8 +2,38 @@ package pkg
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"text/tabwriter"
+	"time"
+)
+
+type optionType uint8
+
+const (
+	writeTimeout                = 10 * time.Second
+	helpCommand                 = "/h"
+	roomPrefix                  = "/room"
+	clientPrefix                = "/client"
+	clientOptionType optionType = iota
+	roomOptionType
+	msgOptionType
+)
+
+// formatDM format's the display message that include timestamp, name of the client and msg
+func formatDM(name, room, msg string) string {
+	return fmt.Sprintf("\0337\r \u001b[36m%s \u001b[35m%s\u001b[0m@\u001b[34m%s\u001b[0m \u001B[33m:\u001B[0m  %s\n\0338", time.Now().UTC().Format(time.Stamp), name, room, msg)
+}
+
+// formatCMDErr format's the display message that indicate the command err.
+func formatCMDErr(cmd string) string {
+	return fmt.Sprintf("\u001b[31m[Error]:\u001b[0m \u001b[34minvalid command\u001b[0m `%s`\n", cmd)
+}
+
+var (
+	welcomeMsg        = "Hi There! Welcome to TELCHAT! Please Enter Your Chatter Name: \n>>"
+	blankTime         = time.Time{}
+	errInvalidCommand = errors.New("invalid command")
 )
 
 // disHelpCommand returns string output for the help command

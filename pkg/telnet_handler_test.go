@@ -24,6 +24,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestDisHelpCommand(t *testing.T) {
+	t.Parallel()
 	gp := filepath.Join("testdata", t.Name()+".golden")
 	if *update {
 		t.Log("update golden file")
@@ -38,6 +39,68 @@ func TestDisHelpCommand(t *testing.T) {
 	t.Log(disHelpCommand())
 	if !bytes.Equal([]byte(disHelpCommand()), g) {
 		t.Errorf("written in disHelpCommand does not match .golden file")
+	}
+}
+
+func TestFormatDM(t *testing.T) {
+	t.Parallel()
+	out := formatDM("Ankur", "default", "hi there")
+	t.Log(formatDM("Ankur", "default", "hi there"))
+	// dates part always chage so we match only sub slice
+	subSlices := []struct {
+		name string
+	}{
+		{
+			name: "Ankur",
+		},
+		{
+			"@",
+		},
+		{
+			"default",
+		},
+		{
+			":",
+		},
+		{
+			name: "hi there",
+		},
+	}
+	for _, ss := range subSlices {
+		t.Run(ss.name, func(t *testing.T) {
+			if !bytes.Contains([]byte(out), []byte(ss.name)) {
+				t.Errorf("subslice %s not found", ss.name)
+			}
+		})
+	}
+}
+
+func TestFormatCMDErr(t *testing.T) {
+	t.Parallel()
+	out := formatCMDErr("hi error")
+	t.Log(formatCMDErr("hi error"))
+	subSlices := []struct {
+		name string
+	}{
+		{
+			name: "[Error]",
+		},
+		{
+			":",
+		},
+		{
+			"invalid command",
+		},
+		{
+			"`hi error`",
+		},
+	}
+	for _, ss := range subSlices {
+		t.Run(ss.name, func(t *testing.T) {
+			if !bytes.Contains([]byte(out), []byte(ss.name)) {
+				t.Errorf("subslice %s not found", ss.name)
+			}
+		})
 	}
 }
 
