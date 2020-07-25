@@ -12,7 +12,7 @@ import (
 
 const (
 	// metaRoom is General chat room
-	metaRoom = "themetaroom"
+	metaRoom = "default"
 )
 
 var (
@@ -31,8 +31,7 @@ type (
 
 // client is each unique client that is connected to the chatServer
 type client struct {
-	conn  net.Conn
-	rooms []roomID
+	conn net.Conn
 	// ignoreList contains all the list of client that a client has decided to ignore
 	ignoreList map[clientID]struct{}
 }
@@ -82,33 +81,21 @@ func (cds *chatDataStore) registerClient(clientName string, conn net.Conn) error
 	cid := clientID(clientName)
 	client := &client{
 		conn:       conn,
-		rooms:      make([]roomID, 0, 2),
 		ignoreList: make(map[clientID]struct{}),
 	}
-	client.rooms = append(client.rooms, metaRoom)
 	cds.clients[cid] = client
 	cds.roomsSubscribers[metaRoom][cid] = conn
 	return nil
 }
 
-// subscribeClient register the client to the given room in the chat
+// addClientToRoom register the client to the given room in the chat
 // data store
-func (cds *chatDataStore) subscribeClient(clientName, roomName string) {
+func (cds *chatDataStore) addClientToRoom(clientName, roomName string) {
 	cds.lock.Lock()
 	defer cds.lock.Unlock()
 	cid := clientID(clientName)
 	roomId := roomID(roomName)
 	client, ok := cds.clients[cid]
-	rIdx := -1
-	for i, v := range client.rooms {
-		if v == roomId {
-			rIdx = i
-			break
-		}
-	}
-	if rIdx != -1 {
-		client.rooms = append(client.rooms, roomId)
-	}
 	// add the client to room store
 	_, ok = cds.roomsSubscribers[roomId]
 	if !ok {
@@ -117,9 +104,9 @@ func (cds *chatDataStore) subscribeClient(clientName, roomName string) {
 	cds.roomsSubscribers[roomId][cid] = client.conn
 }
 
-// unSubscribeClient deregister the client from the given room in the chat
+// removeClientFromRoom deregister the client from the given room in the chat
 // data store
-func (cds *chatDataStore) unSubscribeClient(clientName, roomName string) {
+func (cds *chatDataStore) removeClientFromRoom(clientName, roomName string) {
 	cds.lock.Lock()
 	defer cds.lock.Unlock()
 	cid := clientID(clientName)
@@ -127,19 +114,6 @@ func (cds *chatDataStore) unSubscribeClient(clientName, roomName string) {
 	// delete the client from room store
 	roomM := cds.roomsSubscribers[roomId]
 	delete(roomM, cid)
-	// remove the room from client
-	client := cds.clients[cid]
-	rIdx := -1
-	for i, v := range client.rooms {
-		if v == roomId {
-			rIdx = i
-			break
-		}
-	}
-	if rIdx != -1 {
-		client.rooms[rIdx] = client.rooms[len(client.rooms)-1]
-		client.rooms = client.rooms[:len(client.rooms)-1]
-	}
 }
 
 // deleteClient from the client data store as well as from
@@ -148,25 +122,25 @@ func (cds *chatDataStore) deleteClient(clientName string) {
 	cds.lock.Lock()
 	defer cds.lock.Unlock()
 	cid := clientID(clientName)
-	client := cds.clients[cid]
-
-	// client should not panic at runtime.
-	if client == nil {
-		return
-	}
-	for _, roomId := range client.rooms {
-		roomM := cds.roomsSubscribers[roomId]
-		delete(roomM, cid)
-	}
 	delete(cds.clients, cid)
 }
 
-func (cds *chatDataStore) ignoreClient(myName, clientName string) {
-
+// ignoreNamedClient add the proposed client in the current client ignore list
+func (cds *chatDataStore) ignoreNamedClient(myName, clientName string) {
+	cds.lock.Lock()
+	defer cds.lock.Unlock()
+	mid := clientID(myName)
+	cid := clientID(clientName)
+	cds.clients[mid].ignoreList[cid] = struct{}{}
 }
 
-func (cds *chatDataStore) allowClient(myName, clientName string) {
-
+// allowNamedClient removes the proposed client from the current client ignore list
+func (cds *chatDataStore) allowNamedClient(myName, clientName string) {
+	cds.lock.Lock()
+	defer cds.lock.Unlock()
+	mid := clientID(myName)
+	cid := clientID(clientName)
+	delete(cds.clients[mid].ignoreList, cid)
 }
 
 // broadcast the given message to the room that the client is currently
