@@ -1,0 +1,18 @@
+Thanks for Joining!. You can type /h for help anytime. Quick guide.
+
+ SERIAL		COMMAND		OPTION		ARGS		DESCRIPTION
+ ------		-------		------		----		-----------				
+ 1		/room		change		[name]		join to [name] room			
+ 2		/room		current				display current room			
+ 3		/client		ignore		[name]		ignore [name] client's messages		
+ 4		/client		allow		[name]		allow [name] client's messages
+
+Examples
+
+ 1	/room change myroom3		
+ 2	/room current			
+ 3	/client ignore annoyignone	
+ 4	/client allow annoyignore
+
+Send your typed message to the current room by entering enter
+
