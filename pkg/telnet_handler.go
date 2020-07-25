@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
+	"log"
+	"net"
 	"text/tabwriter"
 	"time"
 )
@@ -45,8 +48,8 @@ func disHelpCommand() string {
 	w.Init(wr, 0, 8, 4, '\t', 0)
 	fmt.Fprintf(w, "\n SERIAL\tCOMMAND\tOPTION\tARGS\tDESCRIPTION")                                 // Header
 	fmt.Fprintf(w, "\n %s\t%s\t%s\t%s\t%s\t", "------", "-------", "------", "----", "-----------") // row separator
-	fmt.Fprintf(w, "\n %s\t%s\t%s\t%s\t%s\t", "1", "/room", "change", "[name]", "join to [name] room")
-	fmt.Fprintf(w, "\n %s\t%s\t%s\t%s\t%s\t", "2", "/room", "current", "", "display current room")                   //
+	fmt.Fprintf(w, "\n %s\t%s\t%s\t%s\t%s\t", "1", "/info", "", "", "display username & current room")
+	fmt.Fprintf(w, "\n %s\t%s\t%s\t%s\t%s\t", "2", "/room", "change", "[name]", "join to [name] room")
 	fmt.Fprintf(w, "\n %s\t%s\t%s\t%s\t%s\t", "3", "/client", "ignore", "[name]", "ignore [name] client's messages") //
 	fmt.Fprintf(w, "\n %s\t%s\t%s\t%s\t%s\t", "4", "/client", "allow", "[name]", "allow [name] client's messages")   //
 	err := w.Flush()
@@ -55,8 +58,8 @@ func disHelpCommand() string {
 	}
 	wr.WriteString("\n\r")
 	wr.WriteString("\nExamples\n\r")
-	fmt.Fprintf(w, "\n %s\t%s\t", "1", "/room change myroom3")
-	fmt.Fprintf(w, "\n %s\t%s\t", "2", "/room current")
+	fmt.Fprintf(w, "\n %s\t%s\t", "1", "/info")
+	fmt.Fprintf(w, "\n %s\t%s\t", "2", "/room change myroom3")
 	fmt.Fprintf(w, "\n %s\t%s\t", "3", "/client ignore annoyignone")
 	fmt.Fprintf(w, "\n %s\t%s\t", "4", "/client allow annoyignore")
 	err = w.Flush()
@@ -67,4 +70,52 @@ func disHelpCommand() string {
 	wr.WriteString("\nSend your typed message to the current room by entering enter")
 	wr.WriteString("\n\r")
 	return wr.String()
+}
+
+// msgWriter writes given msg to the connection with write deadline
+func msgWriter(conn net.Conn, msg string) error {
+	err := conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	if err != nil {
+		log.Printf("SetWriteDeadline failed: %v\n", err)
+		return err
+	}
+	_, err = io.WriteString(conn, msg)
+	if err != nil {
+		log.Println("conn write failed, err: ", err)
+		return err
+	}
+	err = conn.SetWriteDeadline(blankTime)
+	if err != nil {
+		log.Printf("SetWriteDeadline failed: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+// telnetHandler handles the accepted telnet connection's
+type telnetHandler struct {
+	chatStore *chatDataStore
+	helpDMsg  string
+}
+
+// cmdErrWriter writes error in formatted form when any wrong command is provided.
+func (ts *telnetHandler) cmdErrWriter(conn net.Conn, cmd string) error {
+	err := msgWriter(conn, formatCMDErr(cmd))
+	if err != nil {
+		return err
+	}
+	return errInvalidCommand
+}
+
+// infoPrompt writes the information back to user when requested
+func (ts *telnetHandler) infoPrompt(conn net.Conn, name, room string) error {
+	return msgWriter(conn, infoDisplay(name, room))
+}
+
+func (ts *telnetHandler) displayHelp(conn net.Conn, name, room string) error {
+	err := msgWriter(conn, ts.helpDMsg)
+	if err != nil {
+		return err
+	}
+	return ts.infoPrompt(conn, name, room)
 }
