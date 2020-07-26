@@ -117,12 +117,14 @@ func commandType(m string) optionType {
 type telnetHandler struct {
 	chatStore *chatDataStore
 	helpDMsg  string
+	hook      func() // hook is a test noop in live code
 }
 
 func newTelnetS(lw io.Writer) *telnetHandler {
 	return &telnetHandler{
 		chatStore: newChatDataStore(lw),
 		helpDMsg:  disHelpCommand(),
+		hook:      func() {}, // noop function
 	}
 }
 
@@ -186,12 +188,14 @@ func (ts *telnetHandler) clientCommandOps(conn net.Conn, name, cmd string) error
 		}
 		// add to the ignore list.
 		ts.chatStore.ignoreNamedClient(name, arg)
+		ts.hook()
 	case "allow": // allow
 		if len(arg) == 0 {
 			return ts.cmdErrWriter(conn, cmd)
 		}
 		// remove from the ignore list.
 		ts.chatStore.allowNamedClient(name, arg)
+		ts.hook()
 	default:
 		return ts.cmdErrWriter(conn, cmd)
 	}
