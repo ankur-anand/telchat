@@ -158,6 +158,11 @@ func TestServeConnDrop(t *testing.T) {
 func TestIgnoreAllowClientServeConn(t *testing.T) {
 	t.Parallel()
 	ts := newTelnetS(ioutil.Discard)
+	done := make(chan bool)
+	ts.hook = func() {
+		done <- true
+	}
+
 	sc1, cc1 := net.Pipe()
 	go ts.serveConn(sc1)
 	initialRead(t, cc1, []byte("ankur\n\r"))
@@ -174,11 +179,6 @@ func TestIgnoreAllowClientServeConn(t *testing.T) {
 	// ankuranand to ignore msg from ankur
 	msg := []byte("/client ignore ankur\n\r")
 	writeMsg(t, cc3, msg)
-	done := make(chan bool)
-	ts.hook = func() {
-		done <- true
-	}
-
 	select {
 	case <-time.After(time.Second * 2):
 		t.Error("timeout waiting for hook call back")
@@ -223,6 +223,97 @@ func TestIgnoreAllowClientServeConn(t *testing.T) {
 		must(t, err)
 		if !bytes.Contains(readM, []byte("hello everyone")) {
 			t.Errorf("expected msg: %s not found in received msg", "hello everyone")
+		}
+	}
+}
+
+func TestRoomChangeServeConn(t *testing.T) {
+	t.Parallel()
+	ts := newTelnetS(ioutil.Discard)
+	sc1, cc1 := net.Pipe()
+	go ts.serveConn(sc1)
+	initialRead(t, cc1, []byte("ankur\n\r"))
+
+	// start two new client.
+	sc2, cc2 := net.Pipe()
+	go ts.serveConn(sc2)
+	initialRead(t, cc2, []byte("anand\n\r"))
+
+	sc3, cc3 := net.Pipe()
+	go ts.serveConn(sc3)
+	initialRead(t, cc3, []byte("ankuranand\n\r"))
+
+	// all three room change
+	for _, cl := range []net.Conn{cc1, cc2, cc3} {
+		msg := []byte("/room change roomname\n\r")
+		writeMsg(t, cl, msg)
+		// read the room response
+		readM := make([]byte, 512)
+		err := readMsg(t, cl, readM)
+		must(t, err)
+	}
+
+	// ankur client send msg
+	msg := []byte("hello everyone\n\r")
+	writeMsg(t, cc1, msg)
+
+	for _, cl := range []net.Conn{cc2, cc3} {
+		readM := make([]byte, 512)
+		err := readMsg(t, cl, readM)
+		must(t, err)
+		if !bytes.Contains(readM, []byte("hello everyone")) {
+			t.Errorf("expected msg: %s not found in received msg", "hello everyone")
+		}
+	}
+
+	// own read should time out.
+	readM := make([]byte, 512)
+	err := readMsg(t, cc3, readM)
+	if err == nil {
+		t.Error("expected read deadline error got nil")
+	}
+
+	// change ankur room change
+	for _, cl := range []net.Conn{cc1} {
+		msg := []byte("/room change roomnamenew\n\r")
+		writeMsg(t, cl, msg)
+		// read the room response
+		readM := make([]byte, 512)
+		err := readMsg(t, cl, readM)
+		must(t, err)
+	}
+
+	// ankur client send msg
+	msg = []byte("hello everyone\n\r")
+	writeMsg(t, cc1, msg)
+
+	// all read should timeout
+	for _, cl := range []net.Conn{cc1, cc2, cc3} {
+		readM := make([]byte, 512)
+		err := readMsg(t, cl, readM)
+		if err == nil {
+			t.Error("expected read deadline error got nil")
+		}
+	}
+
+	// anand client send msg
+	msg = []byte("hello everyone\n\r")
+	writeMsg(t, cc2, msg)
+
+	// read ankuranand
+	readM = make([]byte, 512)
+	err = readMsg(t, cc3, readM)
+	must(t, err)
+	if !bytes.Contains(readM, []byte("hello everyone")) {
+		t.Errorf("expected msg: %s not found in received msg", "hello everyone")
+	}
+
+	// other two should timeout.
+	for _, cl := range []net.Conn{cc1, cc2} {
+		readM := make([]byte, 512)
+		err := readMsg(t, cl, readM)
+		if err == nil {
+			t.Error("expected read deadline error got nil")
 		}
 	}
 }
