@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"sync/atomic"
 )
@@ -14,6 +15,7 @@ type ChatServer struct {
 	inShutdown     int32 // accessed atomically (non-zero means we're in Shutdown)
 	telnetListener net.Listener
 	messageIO      *messageIO
+	restAPIHandler *restAPIHandler
 }
 
 // NewChatServer returns an initialized ChatServer
@@ -27,9 +29,18 @@ func NewChatServer(filePath string) (*ChatServer, error) {
 		return nil, err
 	}
 	mIo := newMessageIO(fd, readfd)
-	return &ChatServer{telnetHandler: newTelnetS(mIo), messageIO: mIo}, nil
+	return &ChatServer{telnetHandler: newTelnetS(mIo), messageIO: mIo, restAPIHandler: newRestAPIHandler(mIo)}, nil
 }
 
+// ServeHTTP Serves the Rest HTTP API Call.
+func (cs *ChatServer) ServeHTTP(addr string) {
+	err := http.ListenAndServe(addr, cs.restAPIHandler)
+	if err != nil && err != http.ErrServerClosed {
+		panic(err)
+	}
+}
+
+// ServeTelnet responds to the telnet request.
 func (cs *ChatServer) ServeTelnet(addr string) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
