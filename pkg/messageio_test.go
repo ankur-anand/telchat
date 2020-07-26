@@ -34,15 +34,15 @@ func TestMessageIO(t *testing.T) {
 	}
 	time.Sleep(500 * time.Millisecond) // some io breather
 
-	// go func() {
-	// 	msgs := [][]byte{[]byte("hi message new 1"), []byte("hi message new 2"), []byte("hi message new 3")}
-	// 	for _, m := range msgs {
-	// 		_, err = mio.Write(m)
-	// 		if err != nil {
-	// 			t.Errorf("err writing to mio failed %v", err)
-	// 		}
-	// 	}
-	// }()
+	go func() {
+		msgs := [][]byte{[]byte("hi message new 1"), []byte("hi message new 2"), []byte("hi message new 3")}
+		for _, m := range msgs {
+			_, err := mio.Write(m)
+			if err != nil {
+				t.Errorf("err writing to mio failed %v", err)
+			}
+		}
+	}()
 	buff, err := mio.ReadAll()
 	if err != nil {
 		t.Errorf("err reading file content, err: %v", err)
@@ -52,20 +52,20 @@ func TestMessageIO(t *testing.T) {
 			t.Errorf("expected msg: %s not found in received msg", m)
 		}
 	}
-	// time.Sleep(500 * time.Millisecond) // some io breather
-	// buff, err = mio.ReadAll()
-	// if err != nil {
-	// 	t.Errorf("err reading file content, err: %v", err)
-	// }
-	// for _, m := range msgs {
-	// 	if !bytes.Contains(buff, m) {
-	// 		t.Errorf("expected msg: %s not found in received msg", m)
-	// 	}
-	// }
-	// msgs = [][]byte{[]byte("hi message new 1"), []byte("hi message new 2"), []byte("hi message new 3")}
-	// for _, m := range msgs {
-	// 	if !bytes.Contains(buff, m) {
-	// 		t.Errorf("expected msg: %s not found in received msg", m)
-	// 	}
-	// }
+	time.Sleep(500 * time.Millisecond) // some io breather
+	buff, err = mio.ReadAll()
+	if err != nil {
+		t.Errorf("err reading file content, err: %v", err)
+	}
+	for _, m := range msgs {
+		if !bytes.Contains(buff, m) {
+			t.Errorf("expected msg: %s not found in received msg", m)
+		}
+	}
+	msgs = [][]byte{[]byte("hi message new 1"), []byte("hi message new 2"), []byte("hi message new 3")}
+	for _, m := range msgs {
+		if !bytes.Contains(buff, m) {
+			t.Errorf("expected msg: %s not found in received msg", m)
+		}
+	}
 }
