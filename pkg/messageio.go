@@ -10,11 +10,11 @@ import (
 
 // messageIO logs the messages to local log file.
 type messageIO struct {
-	lock      sync.Mutex // support concurrent read and write.
 	mBuffer   chan []byte
 	syCh      chan struct{}
 	file      *os.File
-	readFiled *os.File // to support concurrent read and write op's to the same underlying file.
+	lock      sync.Mutex // support concurrent read
+	readFiled *os.File   // to support concurrent read and write op's to the same underlying file.
 }
 
 // Write to the message buffer.
@@ -112,8 +112,6 @@ func batchWriteMessage(m *messageIO) {
 }
 
 func (m *messageIO) fileWrite(msg []byte) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
 	_, err := m.file.Write(msg)
 	return err
 }
