@@ -172,6 +172,32 @@ func (ts *telnetHandler) roomCommandOps(conn net.Conn, cmd, name string, roomNam
 	}
 }
 
+func (ts *telnetHandler) clientCommandOps(conn net.Conn, name, cmd string) error {
+	cmds := strings.Split(cmd, " ")
+	if len(cmds) != 3 {
+		return ts.cmdErrWriter(conn, cmd)
+	}
+	option := strings.TrimSpace(cmds[1])
+	arg := strings.TrimSpace(cmds[2])
+	switch option {
+	case "ignore": // ignore
+		if len(arg) == 0 {
+			return ts.cmdErrWriter(conn, cmd)
+		}
+		// add to the ignore list.
+		ts.chatStore.ignoreNamedClient(name, arg)
+	case "allow": // allow
+		if len(arg) == 0 {
+			return ts.cmdErrWriter(conn, cmd)
+		}
+		// remove from the ignore list.
+		ts.chatStore.allowNamedClient(name, arg)
+	default:
+		return ts.cmdErrWriter(conn, cmd)
+	}
+	return nil
+}
+
 // serveConn serve all of the net.Conn
 func (ts *telnetHandler) serveConn(conn net.Conn) {
 	defer func() {
@@ -266,7 +292,10 @@ func (ts *telnetHandler) serveConn(conn net.Conn) {
 					return
 				}
 			case clientOptionType:
-
+				err := ts.clientCommandOps(conn, name, command)
+				if err != nil && !errors.Is(err, errInvalidCommand) {
+					return
+				}
 			}
 		}
 	}
