@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -17,6 +18,7 @@ type ChatServer struct {
 	telnetListener net.Listener
 	messageIO      *messageIO
 	restAPIHandler *restAPIHandler
+	server         *http.Server
 }
 
 // NewChatServer returns an initialized ChatServer
@@ -36,7 +38,12 @@ func NewChatServer(filePath string) (*ChatServer, error) {
 
 // ServeHTTP Serves the Rest HTTP API Call.
 func (cs *ChatServer) ServeHTTP(addr string) {
-	err := http.ListenAndServe(addr, cs.restAPIHandler)
+	server := &http.Server{}
+	server.Addr = addr
+	server.Handler = cs.restAPIHandler
+	cs.server = server
+	log.Printf("http server starting on address: %s", addr)
+	err := server.ListenAndServe()
 	if err != nil && err != http.ErrServerClosed {
 		panic(err)
 	}
@@ -60,10 +67,11 @@ func (cs *ChatServer) ServeTelnet(addr string) {
 			if ne, ok := err.(net.Error); ok && ne.Temporary() {
 				return
 			}
-			log.Printf("unable to accept a connection, error: %s\n", err)
-			err := conn.Close()
-			if err != nil {
-				log.Printf("unable to close accept connection, error: %s\n", err)
+			if conn != nil {
+				err := conn.Close()
+				if err != nil {
+					log.Printf("unable to close accept connection, error: %s\n", err)
+				}
 			}
 			return
 		}
@@ -94,6 +102,11 @@ func (cs *ChatServer) Shutdown() {
 	err = cs.messageIO.Close()
 	if err != nil {
 		log.Printf("err closing fd logs, err: %v \n", err)
+	}
+
+	err = cs.server.Shutdown(context.Background())
+	if err != nil {
+		log.Printf("err closing http Server, err: %v \n", err)
 	}
 }
 
