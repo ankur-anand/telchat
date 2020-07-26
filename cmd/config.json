@@ -1,0 +1,5 @@
+{
+  "log_file": "./telchat.log",
+  "telnet_addr": ":3001",
+  "http_addr": ":3002"
+}
