@@ -132,6 +132,29 @@ func TestServeConn(t *testing.T) {
 	}
 }
 
+func TestServeConnDrop(t *testing.T) {
+	t.Parallel()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("recover func should have been called")
+		}
+	}()
+	// this should not panic
+	ts := newTelnetS(ioutil.Discard)
+	sc, cc := net.Pipe()
+	go ts.serveConn(sc)
+
+	b := make([]byte, 4096)
+	_, err := cc.Read(b)
+	must(t, err)
+	// write the name to the chat server
+	err = cc.SetWriteDeadline(time.Now().Add(time.Millisecond * 10))
+	must(t, err)
+	time.Sleep(time.Millisecond * 10)
+	err = cc.Close()
+	must(t, err)
+}
+
 func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
