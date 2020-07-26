@@ -146,10 +146,6 @@ func (cds *chatDataStore) allowNamedClient(myName, clientName string) {
 // broadcast the given message to the room that the client is currently
 // part of.
 func (cds *chatDataStore) broadcastMsg(ctx context.Context, clientName, roomName string, msg []byte) {
-	_, err := cds.logWriter.Write(msg)
-	if err != nil {
-		log.Println("err logging message", err)
-	}
 	cds.lock.RLock()
 	defer cds.lock.RUnlock()
 	cid := clientID(clientName)

@@ -115,6 +115,7 @@ func commandType(m string) optionType {
 
 // telnetHandler handles the accepted telnet connection's
 type telnetHandler struct {
+	mWriter   io.Writer
 	chatStore *chatDataStore
 	helpDMsg  string
 	hook      func() // hook is a test noop in live code
@@ -122,6 +123,7 @@ type telnetHandler struct {
 
 func newTelnetS(lw io.Writer) *telnetHandler {
 	return &telnetHandler{
+		mWriter:   lw,
 		chatStore: newChatDataStore(lw),
 		helpDMsg:  disHelpCommand(),
 		hook:      func() {}, // noop function
@@ -290,6 +292,7 @@ func (ts *telnetHandler) serveConn(conn net.Conn) {
 			switch commandType(command) {
 			case msgOptionType:
 				ts.chatStore.broadcastMsg(context.TODO(), name, currentRoom, []byte(formatDM(name, currentRoom, command)))
+				ts.logWriter(command)
 			case roomOptionType:
 				err := ts.roomCommandOps(conn, command, name, &currentRoom)
 				if err != nil && !errors.Is(err, errInvalidCommand) {
@@ -302,5 +305,12 @@ func (ts *telnetHandler) serveConn(conn net.Conn) {
 				}
 			}
 		}
+	}
+}
+
+func (ts *telnetHandler) logWriter(command string) {
+	_, err := ts.mWriter.Write([]byte(command + "\n\r")) // write message to the log file
+	if err != nil {
+		log.Println("error writing message to the log file")
 	}
 }

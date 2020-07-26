@@ -2,9 +2,9 @@ package pkg
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"sync/atomic"
 )
 
@@ -13,11 +13,21 @@ type ChatServer struct {
 	telnetHandler  *telnetHandler
 	inShutdown     int32 // accessed atomically (non-zero means we're in Shutdown)
 	telnetListener net.Listener
+	messageIO      *messageIO
 }
 
 // NewChatServer returns an initialized ChatServer
-func NewChatServer() *ChatServer {
-	return &ChatServer{telnetHandler: newTelnetS(ioutil.Discard)}
+func NewChatServer(filePath string) (*ChatServer, error) {
+	fd, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return nil, err
+	}
+	readfd, err := os.OpenFile(filePath, os.O_RDONLY, 0644)
+	if err != nil {
+		return nil, err
+	}
+	mIo := newMessageIO(fd, readfd)
+	return &ChatServer{telnetHandler: newTelnetS(mIo), messageIO: mIo}, nil
 }
 
 func (cs *ChatServer) ServeTelnet(addr string) {
@@ -61,9 +71,17 @@ func (cs *ChatServer) Shutdown() {
 	atomic.StoreInt32(&cs.inShutdown, 1)
 	err := cs.telnetListener.Close()
 	if err != nil {
-		log.Printf("unable to close listener conn, err: %v", err)
+		log.Printf("unable to close listener conn, err: %v \n", err)
 	}
 	cs.telnetHandler.chatStore.closeAllConn()
+	err = cs.messageIO.Sync()
+	if err != nil {
+		log.Printf("err sync message logs, err: %v \n", err)
+	}
+	err = cs.messageIO.Close()
+	if err != nil {
+		log.Printf("err closing fd logs, err: %v \n", err)
+	}
 }
 
 func (cs *ChatServer) shuttingDown() bool {
