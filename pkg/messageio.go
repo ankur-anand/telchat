@@ -52,7 +52,9 @@ func (m *messageIO) ReadAll() ([]byte, error) {
 
 // Close the underlying file
 func (m *messageIO) Close() error {
-	return m.file.Close()
+	err := m.readFiled.Close()
+	err = m.file.Close()
+	return err
 }
 
 func (m *messageIO) Sync() error {
