@@ -5,9 +5,11 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 var (
@@ -101,6 +103,32 @@ func TestFormatCMDErr(t *testing.T) {
 				t.Errorf("subslice %s not found", ss.name)
 			}
 		})
+	}
+}
+
+func TestServeConn(t *testing.T) {
+	t.Parallel()
+	ts := newTelnetS(ioutil.Discard)
+	sc, cc := net.Pipe()
+	go ts.serveConn(sc)
+
+	b := make([]byte, 4096)
+	_, err := cc.Read(b)
+	must(t, err)
+	// write the name to the chat server
+	err = cc.SetWriteDeadline(time.Now().Add(time.Millisecond * 10))
+	must(t, err)
+	_, err = cc.Write([]byte("ankur\n\r"))
+	must(t, err)
+	b = make([]byte, 4096)
+	_, err = cc.Read(b)
+	must(t, err)
+	b = make([]byte, 128)
+	n, err := cc.Read(b)
+	must(t, err)
+	expected := infoDisplay("ankur", metaRoom)
+	if !bytes.Equal(b[:n], []byte(expected)) {
+		t.Log(expected)
 	}
 }
 

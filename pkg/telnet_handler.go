@@ -1,12 +1,15 @@
 package pkg
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"strings"
 	"text/tabwriter"
 	"time"
 )
@@ -16,6 +19,7 @@ type optionType uint8
 const (
 	writeTimeout                = 10 * time.Second
 	helpCommand                 = "/h"
+	infoCommand                 = "/info"
 	roomPrefix                  = "/room"
 	clientPrefix                = "/client"
 	clientOptionType optionType = iota
@@ -23,14 +27,19 @@ const (
 	msgOptionType
 )
 
-// formatDM format's the display message that include timestamp, name of the client and msg
+// formatDM format's the display message that include timestamp, name of the client and msg in terminal format
 func formatDM(name, room, msg string) string {
 	return fmt.Sprintf("\0337\r \u001b[36m%s \u001b[35m%s\u001b[0m@\u001b[34m%s\u001b[0m \u001B[33m:\u001B[0m  %s\n\0338", time.Now().UTC().Format(time.Stamp), name, room, msg)
 }
 
-// formatCMDErr format's the display message that indicate the command err.
+// formatCMDErr format's the display message that indicate the command err in terminal format.
 func formatCMDErr(cmd string) string {
 	return fmt.Sprintf("\u001b[31m[Error]:\u001b[0m \u001b[34minvalid command\u001b[0m `%s`\n", cmd)
+}
+
+// infoDisplay decorate the name and room information in terminal format
+func infoDisplay(name, room string) string {
+	return fmt.Sprintf("\u001B[35m%s\u001B[0m: \u001B[34m[%s]\u001B[0m \n\r", name, room)
 }
 
 var (
@@ -92,10 +101,29 @@ func msgWriter(conn net.Conn, msg string) error {
 	return nil
 }
 
+func commandType(m string) optionType {
+	if strings.HasPrefix(m, clientPrefix) {
+		return clientOptionType
+	}
+
+	if strings.HasPrefix(m, roomPrefix) {
+		return roomOptionType
+	}
+
+	return msgOptionType
+}
+
 // telnetHandler handles the accepted telnet connection's
 type telnetHandler struct {
 	chatStore *chatDataStore
 	helpDMsg  string
+}
+
+func newTelnetS(lw io.Writer) *telnetHandler {
+	return &telnetHandler{
+		chatStore: newChatDataStore(lw),
+		helpDMsg:  disHelpCommand(),
+	}
 }
 
 // cmdErrWriter writes error in formatted form when any wrong command is provided.
@@ -118,4 +146,128 @@ func (ts *telnetHandler) displayHelp(conn net.Conn, name, room string) error {
 		return err
 	}
 	return ts.infoPrompt(conn, name, room)
+}
+
+// roomCommandOps handles all room command operation
+func (ts *telnetHandler) roomCommandOps(conn net.Conn, cmd, name string, roomName *string) error {
+	cmds := strings.Split(cmd, " ")
+	if len(cmds) != 3 {
+		return ts.cmdErrWriter(conn, cmd)
+	}
+	option := strings.TrimSpace(cmds[1])
+	arg := strings.TrimSpace(cmds[2])
+	switch option {
+	case "change": // change
+		if len(arg) == 0 {
+			return ts.cmdErrWriter(conn, cmd)
+		}
+		// remove from current room
+		ts.chatStore.removeClientFromRoom(name, *roomName)
+		// add the client to the new room
+		ts.chatStore.addClientToRoom(name, arg)
+		*roomName = arg
+		return ts.infoPrompt(conn, name, *roomName)
+	default:
+		return ts.cmdErrWriter(conn, cmd)
+	}
+}
+
+// serveConn serve all of the net.Conn
+func (ts *telnetHandler) serveConn(conn net.Conn) {
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			log.Println("conn close failed, err: ", err)
+		}
+	}()
+	// Welcome user on the screen.
+	err := msgWriter(conn, welcomeMsg)
+	if err != nil {
+		log.Println("unable to welcome user on screen, err: ", err)
+		return
+	}
+
+	// split read each line from conn
+	connScan := bufio.NewScanner(conn)
+	var name string
+	// split scan on new line
+	// get user name
+
+	// clientReg marks that this client has been registered
+	// this prevent the case when the client terminate the connection
+	// before it get registered with the store,
+	clientReg := false
+	for connScan.Scan() {
+		if err := connScan.Err(); err != nil {
+			log.Println("username scan failed", err)
+			return
+		}
+		name = connScan.Text()
+		if name == "" {
+			err = msgWriter(conn, "name cannot be empty \n>>")
+			if err != nil {
+				log.Println("conn write failed, err: ", err)
+				return
+			}
+			continue
+		}
+
+		// if name is already taken ask for new name.
+		if err := ts.chatStore.registerClient(name, conn); err != nil {
+			err = msgWriter(conn, fmt.Sprintf("name %s Taken, try new name \n>>", name))
+			if err != nil {
+				log.Println("conn write failed, err: ", err)
+				return
+			}
+			continue
+		}
+		clientReg = true
+		break
+	}
+	if !clientReg {
+		return
+	}
+	defer ts.chatStore.deleteClient(name)
+	currentRoom := metaRoom
+	err = ts.displayHelp(conn, name, currentRoom)
+	if err != nil {
+		return
+	}
+	log.Printf("new client connected name: %s, remoteAddr: %s", name, conn.RemoteAddr())
+	defer func() {
+		log.Printf("client disconnected name: %s, remoteAddr: %s", name, conn.RemoteAddr())
+	}()
+	for connScan.Scan() {
+		if err := connScan.Err(); err != nil {
+			log.Println("conn state err", err)
+			return
+		}
+		command := strings.TrimSpace(connScan.Text())
+		switch command {
+		// single command
+		case helpCommand:
+			err := ts.displayHelp(conn, name, currentRoom)
+			if err != nil {
+				return
+			}
+		case infoCommand:
+			err := ts.infoPrompt(conn, name, currentRoom)
+			if err != nil {
+				return
+			}
+		default:
+			// check if command query
+			switch commandType(command) {
+			case msgOptionType:
+				ts.chatStore.broadcastMsg(context.TODO(), name, currentRoom, []byte(formatDM(name, currentRoom, command)))
+			case roomOptionType:
+				err := ts.roomCommandOps(conn, command, name, &currentRoom)
+				if err != nil && !errors.Is(err, errInvalidCommand) {
+					return
+				}
+			case clientOptionType:
+
+			}
+		}
+	}
 }
