@@ -130,6 +130,15 @@ func newTelnetS(lw io.Writer) *telnetHandler {
 	}
 }
 
+func newTelnetHFromChatStore(lw io.Writer, store *chatDataStore) *telnetHandler {
+	return &telnetHandler{
+		mWriter:   lw,
+		chatStore: store,
+		helpDMsg:  disHelpCommand(),
+		hook:      func() {}, // noop function
+	}
+}
+
 // cmdErrWriter writes error in formatted form when any wrong command is provided.
 func (ts *telnetHandler) cmdErrWriter(conn net.Conn, cmd string) error {
 	err := msgWriter(conn, formatCMDErr(cmd))

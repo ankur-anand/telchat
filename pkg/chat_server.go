@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -29,7 +30,8 @@ func NewChatServer(filePath string) (*ChatServer, error) {
 		return nil, err
 	}
 	mIo := newMessageIO(fd, readfd)
-	return &ChatServer{telnetHandler: newTelnetS(mIo), messageIO: mIo, restAPIHandler: newRestAPIHandler(mIo)}, nil
+	cStore := newChatDataStore(ioutil.Discard)
+	return &ChatServer{telnetHandler: newTelnetHFromChatStore(mIo, cStore), messageIO: mIo, restAPIHandler: newRestAPIHandler(mIo, cStore)}, nil
 }
 
 // ServeHTTP Serves the Rest HTTP API Call.
