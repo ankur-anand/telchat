@@ -161,9 +161,12 @@ func (cds *chatDataStore) broadcastMsg(ctx context.Context, clientName, roomName
 			continue
 		}
 		// if cid is in the ignore list don't broadcast
-		_, ok := cds.clients[keyCID].ignoreList[cid]
+		cl, ok := cds.clients[keyCID]
 		if ok {
-			continue
+			_, ok := cl.ignoreList[cid]
+			if ok {
+				continue
+			}
 		}
 
 		go cds.sendMsg(ctx, conn, msg)

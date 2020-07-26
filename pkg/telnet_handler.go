@@ -29,7 +29,7 @@ const (
 
 // formatDM format's the display message that include timestamp, name of the client and msg in terminal format
 func formatDM(name, room, msg string) string {
-	return fmt.Sprintf("\0337\r \u001b[36m%s \u001b[35m%s\u001b[0m@\u001b[34m%s\u001b[0m \u001B[33m:\u001B[0m  %s\n\0338", time.Now().UTC().Format(time.Stamp), name, room, msg)
+	return fmt.Sprintf("\n\r\033[1A\033[0K \u001b[36m%s \u001b[35m%s\u001b[0m@\u001b[34m%s\u001b[0m \u001B[33m:\u001B[0m  %s\n", time.Now().UTC().Format(time.Stamp), name, room, msg)
 }
 
 // formatCMDErr format's the display message that indicate the command err in terminal format.
